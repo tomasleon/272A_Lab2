@@ -1,0 +1,90 @@
+---
+title: "Lab 2 - R"
+author: "Tomás León"
+date: "1/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(RColorBrewer)
+library(ggplot2)
+library(ggmap)
+library(dplyr)
+```
+
+First, we have to load our data. We have spatial state data and COVID data in table form.
+
+We need to subset/modify to remove the cruiseships and to look at only the Continental US for mapping purposes.
+
+
+```{r Read in Data, include = FALSE}
+us_states <- st_read("cb_2019_us_state_500k//")
+covid_states <- read.csv("covid_state_01-23-2021.csv")
+
+us_states$NAME
+covid_states$Province_State
+
+## Remove cruise ships
+covid_states <- covid_states[-c(10,14),]
+
+## Create continental-only versions
+non_continental_names <- c("Guam", "United States Virgin Islands", "Virgin Islands", "American Samoa", "Commonwealth of the Northern Mariana Islands", "Northern Mariana Islands", "Hawaii", "Alaska", "Puerto Rico")
+
+covid_continental <- covid_states %>% filter(!(Province_State %in% non_continental_names))
+us_continental <- us_states %>% filter(!(NAME %in% non_continental_names))
+
+us <- c(left = -125, bottom = 25, right = -67, top = 49)
+us_basemap <- get_stamenmap(us, zoom = 5, maptype = "toner-lite")
+#us_basemap <- readRDS("us_basemap.Rds")
+```
+
+Now, let's look at what data we have.
+
+```{r Examine Data}
+colnames(us_continental)
+colnames(covid_continental)
+```
+
+Let's try out some basic map plotting.
+
+```{r Basic Map Plot}
+plot(us_continental["NAME"], main = "Continental US")
+
+ggmap(us_basemap)
+
+ggmap(us_basemap) + geom_point(data = covid_continental, aes(x = Long_, y = Lat, size = Deaths),
+                               col = "darkred") + theme_void()
+
+ggmap(us_basemap) + geom_sf(data = us_continental, aes(fill = NAME), inherit.aes = FALSE) + guides(fill = FALSE)
+
+
+```
+
+Now let's join our two data sources so we can plot the information together.
+
+```{r Do table join}
+
+us_continental_covid <- left_join(us_continental, covid_continental, by = c(NAME = "Province_State"))
+
+#us_continental_covid
+```
+
+After doing the join, we can now create choropleth maps for the US state COVID data.
+
+```{r Make choropleth map with COVID state data}
+
+ggplot(us_continental_covid) + geom_sf(aes(fill = Incident_Rate)) + 
+  scale_fill_distiller(name = "Case Incidence", palette = "RdBu") + theme_void()
+
+
+pal <-brewer.pal(5, "Greens")
+
+plot(us_continental_covid["Testing_Rate"],
+     main = "Testing Rate in US States",
+     breaks = "pretty", nbreaks = 5, pal = pal)
+
+
+```
+
